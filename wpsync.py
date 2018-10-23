@@ -1,4 +1,4 @@
-import os, sys, hashlib, json
+import os, sys, hashlib, json, datetime, subprocess
 
 class WpSync:
 
@@ -30,6 +30,35 @@ class WpSync:
 			self.fatalUsage()
 
 		self._autoConfigure()
+		self._autoBackup()
+
+	def getMysqlCredentials(self, where):
+		creds = {}
+		creds['host'] = self._getFilledInput("%s MySQL hostname" % where)
+		creds['user'] = self._getFilledInput("%s MySQL user" % where)
+		creds['pass'] = self._getFilledInput("%s MySQL password" % where)
+		return creds
+
+	def _autoBackup(self):
+		if not os.path.isdir("%s/backups" % self.configBaseFp):
+			os.mkdir("%s/backups" % self.configBaseFp, 0o700)
+
+		if (self.mode == "push"):
+			creds = self.getMysqlCredentials("Local")
+			outputFile = "%s/backups/%s-%s.sql.zip" % (self.configBaseFp, self.sha,
+				"{:%Y-%m-%d-%H:%M}".format(datetime.datetime.now()))
+			args = ["mysqldump", "-h%s" % creds["host"], "-u%s" % creds["user"],
+				"-p%s" % creds["pass"], self.config["baseDb"], "|", "gzip", ">",
+				outputFile]
+
+			if (not subprocess.call(" ".join(args), shell=True) == 0):
+				print("Failed to backup local database. Are the credentials you provided correct?")
+				sys.exit(1)
+
+			print("Local database was backed up to %s" % outputFile)
+
+		else:
+			print("Backup on mode %s not implemented" % self.mode)
 
 	def fatalUsage(self):
 		print("Usage: wpsync [mode] [path-to-wordpress]")
